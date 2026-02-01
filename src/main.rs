@@ -54,6 +54,19 @@ enum Commands {
         last: Option<usize>,
     },
 
+    /// Peek at first/last lines of a file (like head/tail)
+    #[command(name = "peek")]
+    Peek {
+        /// File to peek at
+        file: PathBuf,
+        /// Number of lines to show
+        #[arg(short, long, default_value = "10")]
+        lines: usize,
+        /// Show last lines instead of first
+        #[arg(short, long)]
+        tail: bool,
+    },
+
     /// Find files or text (like find/grep)
     #[command(name = "find", alias = "search")]
     Find {
@@ -71,6 +84,83 @@ enum Commands {
         /// Show line numbers for content matches
         #[arg(short, long)]
         line_numbers: bool,
+    },
+
+    /// Search for text in files recursively (like grep -r)
+    #[command(name = "search", alias = "grep")]
+    Search {
+        /// Pattern to search for
+        pattern: String,
+        /// Where to search (defaults to current folder)
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Number of context lines to show
+        #[arg(short, long, default_value = "2")]
+        context: usize,
+    },
+
+    /// Show file permissions (like ls -la)
+    #[command(name = "permissions", alias = "perms")]
+    Permissions {
+        /// File or directory to check
+        path: PathBuf,
+    },
+
+    /// Show directory tree structure
+    #[command(name = "tree")]
+    Tree {
+        /// Root directory (defaults to current)
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Maximum depth to display
+        #[arg(short, long, default_value = "3")]
+        depth: usize,
+    },
+
+    /// Show environment variables (like env/printenv)
+    #[command(name = "env")]
+    Env {
+        /// Filter by pattern
+        pattern: Option<String>,
+    },
+
+    /// Show network interfaces and IPs (like ifconfig/ip)
+    #[command(name = "network", alias = "net")]
+    Network,
+
+    /// Show listening ports (like netstat/ss)
+    #[command(name = "ports")]
+    Ports {
+        /// Filter by port number
+        port: Option<String>,
+    },
+
+    /// Watch a file or command for changes
+    #[command(name = "watch")]
+    Watch {
+        /// File path or command to watch
+        target: String,
+        /// Check interval in seconds
+        #[arg(short, long, default_value = "2")]
+        interval: u64,
+    },
+
+    /// Show disk I/O stats (like iostat)
+    #[command(name = "disk")]
+    Disk,
+
+    /// Find and replace in files (like sed)
+    #[command(name = "replace", alias = "sed")]
+    Replace {
+        /// Text to find
+        old: String,
+        /// Text to replace with
+        new: String,
+        /// File to modify
+        file: PathBuf,
+        /// Replace all occurrences
+        #[arg(short, long)]
+        all: bool,
     },
 
     /// Copy files or folders
@@ -203,7 +293,7 @@ enum Commands {
     },
 
     /// Show disk space (like df)
-    #[command(name = "space", alias = "disk")]
+    #[command(name = "space", alias = "diskfree")]
     Space,
 
     /// Count lines, words, bytes in files (like wc)
@@ -284,8 +374,38 @@ fn main() {
         Commands::Show { file, numbers, first, last } => {
             show::execute(file, numbers, first, last)
         }
+        Commands::Peek { file, lines, tail } => {
+            peek::execute(file, lines, tail)
+        }
         Commands::Find { pattern, path, inside, ignore_case, line_numbers } => {
             find::execute(pattern, path, inside, ignore_case, line_numbers)
+        }
+        Commands::Search { pattern, path, context } => {
+            search::execute(pattern, path, context)
+        }
+        Commands::Permissions { path } => {
+            permissions::execute(path)
+        }
+        Commands::Tree { path, depth } => {
+            tree::execute(path, depth)
+        }
+        Commands::Env { pattern } => {
+            env::execute(pattern)
+        }
+        Commands::Network => {
+            network::execute()
+        }
+        Commands::Ports { port } => {
+            ports::execute(port)
+        }
+        Commands::Watch { target, interval } => {
+            watch::execute(target, interval)
+        }
+        Commands::Disk => {
+            disk::execute()
+        }
+        Commands::Replace { old, new, file, all } => {
+            replace::execute(old, new, file, all)
         }
         Commands::Copy { from, to, recursive, progress } => {
             copy::execute(from, to, recursive, progress)

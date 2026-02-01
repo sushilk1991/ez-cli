@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, Write, Read};
+use std::io::{Write, Read};
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
 

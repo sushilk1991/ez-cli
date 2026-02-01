@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::PathBuf;
-use colored::*;
 
 pub fn execute(file: PathBuf, reverse: bool, numeric: bool, unique: bool) -> Result<(), String> {
     let contents = fs::read_to_string(&file).map_err(|e| {

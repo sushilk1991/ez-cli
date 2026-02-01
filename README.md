@@ -26,7 +26,17 @@ cargo install --path .
 |------------|-----------------|-------------|
 | `ez list` | `ls` | List files with icons and colors |
 | `ez show` | `cat` | Display file contents |
+| `ez peek` | `head`/`tail` | Show first/last N lines of file |
 | `ez find` | `find`/`grep` | Find files or search in files |
+| `ez search` | `grep -r` | Recursive search with context |
+| `ez permissions` | `ls -la` | Show detailed file permissions |
+| `ez tree` | `tree` | Show directory structure |
+| `ez env` | `env`/`printenv` | Show/search environment variables |
+| `ez network` | `ip`/`ifconfig` | Show network interfaces |
+| `ez ports` | `netstat`/`ss` | Show listening ports |
+| `ez watch` | - | Watch file/command for changes |
+| `ez disk` | `iostat` | Show disk I/O statistics |
+| `ez replace` | `sed` | Find and replace in files |
 | `ez copy` | `cp` | Copy files/folders with progress |
 | `ez move` | `mv` | Move/rename files |
 | `ez remove` | `rm` | Remove files/folders safely |
@@ -63,33 +73,6 @@ ez list --all
 ez list --time
 ```
 
-### Finding Files
-```bash
-# Find files by name
-ez find "*.rs"
-
-# Search inside files (like grep)
-ez find "TODO" --inside
-
-# Case-insensitive search with line numbers
-ez find "error" --inside --ignore-case --line-numbers
-```
-
-### Working with Files
-```bash
-# Copy with progress bar
-ez copy large_file.zip backup/ --progress
-
-# Copy directories recursively
-ez copy folder/ backup/ --recursive
-
-# Remove with confirmation (safer than rm!)
-ez remove folder/ --recursive
-
-# Force remove without asking
-ez remove temp/ --recursive --force
-```
-
 ### Viewing Files
 ```bash
 # Show file with line numbers
@@ -100,6 +83,80 @@ ez show log.txt --first 20
 
 # Show last 50 lines
 ez show log.txt --last 50
+
+# Quick peek at file (like head/tail)
+ez peek file.txt --lines 20
+ez peek file.txt --lines 10 --tail
+```
+
+### Finding Files and Text
+```bash
+# Find files by name
+ez find "*.rs"
+
+# Search inside files (like grep)
+ez find "TODO" --inside
+
+# Case-insensitive search with line numbers
+ez find "error" --inside --ignore-case --line-numbers
+
+# Recursive search with context
+ez search "pattern" ./src --context 3
+```
+
+### File Permissions and Information
+```bash
+# Show detailed file permissions
+ez permissions file.txt
+
+# Show directory tree
+ez tree ./src
+ez tree ./src --depth 5
+```
+
+### Environment and System
+```bash
+# Show all environment variables
+ez env
+
+# Search environment variables
+ez env PATH
+ez env HOME
+
+# Show network interfaces
+ez network
+
+# Show listening ports
+ez ports
+ez ports 8080
+
+# Watch file for changes
+ez watch file.txt
+
+# Watch command output
+ez watch "ps aux"
+
+# Show disk I/O stats
+ez disk
+```
+
+### Working with Files
+```bash
+# Copy with progress bar
+ez copy large_file.zip backup/ --progress
+
+# Copy directories recursively
+ez copy folder/ backup/ --recursive
+
+# Find and replace
+ez replace "old_text" "new_text" file.txt
+ez replace "old_text" "new_text" file.txt --all
+
+# Remove with confirmation (safer than rm!)
+ez remove folder/ --recursive
+
+# Force remove without asking
+ez remove temp/ --recursive --force
 ```
 
 ### Archives
@@ -161,6 +218,9 @@ ez compare file1.txt file2.txt --side-by-side
 - **🔍 Helpful Errors**: Clear error messages instead of cryptic Unix errors
 - **📦 Archive Support**: Zip, Tar, Tar.gz, Tar.bz2 support
 - **🔎 Smart Search**: Find files or search inside them with one command
+- **👁️ File Watching**: Monitor files and commands for changes
+- **🌐 Network Tools**: Easy network and port inspection
+- **🔧 Text Manipulation**: Simple find/replace without complex regex
 
 ## 🆚 Comparison with Unix Commands
 

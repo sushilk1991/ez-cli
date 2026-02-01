@@ -57,6 +57,7 @@ pub fn execute(
 
             let time_str = metadata
                 .as_ref()
+                .ok()
                 .and_then(|m| m.modified().ok())
                 .map(|t| utils::format_time(t))
                 .unwrap_or_else(|| "-".dimmed().to_string());

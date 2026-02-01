@@ -3,7 +3,10 @@ use colored::*;
 pub fn execute(command: Option<String>) -> Result<(), String> {
     match command {
         Some(cmd) => show_command_help(&cmd),
-        None => show_all_help(),
+        None => {
+            show_all_help();
+            Ok(())
+        }
     }
 }
 

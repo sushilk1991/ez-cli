@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use colored::*;
 use walkdir::WalkDir;
@@ -35,7 +35,7 @@ fn detect_format(path: &PathBuf) -> Option<crate::ArchiveFormat> {
 fn pack_zip(archive: PathBuf, files: Vec<PathBuf>) -> Result<(), String> {
     let file = File::create(&archive).map_err(|e| format!("Cannot create archive: {}", e))?;
     let mut zip = zip::ZipWriter::new(file);
-    let options: FileOptions<()> = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     for path in files {
         if path.is_file() {

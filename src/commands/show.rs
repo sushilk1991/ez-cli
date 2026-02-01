@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::PathBuf;
-use std::io::{self, BufRead};
 use colored::*;
 
 pub fn execute(
@@ -28,7 +27,7 @@ pub fn execute(
 
     for (i, line) in lines_to_show.iter().enumerate() {
         if numbers {
-            let line_num = if let Some(n) = first {
+            let line_num = if let Some(_n) = first {
                 i + 1
             } else if let Some(_) = last {
                 total_lines - lines_to_show.len() + i + 1
