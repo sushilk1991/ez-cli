@@ -14,6 +14,9 @@ use std::path::PathBuf;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Output results as JSON for AI agents
+    #[arg(long, global = true)]
+    json: bool,
 }
 
 #[derive(Subcommand)]
@@ -68,7 +71,7 @@ enum Commands {
     },
 
     /// Find files or text (like find/grep)
-    #[command(name = "find", alias = "search")]
+    #[command(name = "find")]
     Find {
         /// What to find
         pattern: String,
@@ -348,6 +351,20 @@ enum Commands {
         file: PathBuf,
     },
 
+    /// Explain any Unix command in plain English
+    #[command(name = "explain")]
+    Explain {
+        /// The command to explain
+        command: String,
+    },
+
+    /// Build a Unix pipeline from natural language
+    #[command(name = "chain")]
+    Chain {
+        /// What you want to do in plain English
+        query: String,
+    },
+
     /// Show command help and examples
     #[command(name = "help-me", alias = "examples")]
     HelpMe {
@@ -366,6 +383,7 @@ enum ArchiveFormat {
 
 fn main() {
     let cli = Cli::parse();
+    let json = cli.json;
 
     let result = match cli.command {
         Commands::List { path, all, details, time, size } => {
@@ -457,6 +475,12 @@ fn main() {
         }
         Commands::MakeRunnable { file } => {
             make_runnable::execute(file)
+        }
+        Commands::Explain { command } => {
+            explain::run(&command, json)
+        }
+        Commands::Chain { query } => {
+            chain::run(&query, json)
         }
         Commands::HelpMe { command } => {
             help_me::execute(command)

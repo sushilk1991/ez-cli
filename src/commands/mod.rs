@@ -1,8 +1,10 @@
+pub mod chain;
 pub mod copy;
 pub mod create_file;
 pub mod create_folder;
 pub mod disk;
 pub mod env;
+pub mod explain;
 pub mod find;
 pub mod help_me;
 pub mod list;
