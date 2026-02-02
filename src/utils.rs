@@ -19,6 +19,7 @@ pub fn format_time(time: SystemTime) -> String {
     datetime.format("%b %d %H:%M").to_string()
 }
 
+#[allow(dead_code)]
 pub fn format_duration(seconds: u64) -> String {
     if seconds < 60 {
         format!("{}s", seconds)

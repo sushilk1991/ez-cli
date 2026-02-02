@@ -25,6 +25,7 @@ pub struct StageResult {
 }
 
 struct CommandInfo {
+    #[allow(dead_code)]
     name: &'static str,
     description: &'static str,
     flags: HashMap<&'static str, &'static str>,
@@ -1961,9 +1962,7 @@ fn generate_plain_english(cmd: &str, args: &[String], _parts: &[String]) -> Stri
                 plain.push_str("Create a hard link");
             }
         }
-        "ps" => {
-            plain.push_str("Display running processes");
-        }
+        // "ps" handled earlier (docker context)
         "top" => {
             plain.push_str("Monitor system processes interactively");
         }
