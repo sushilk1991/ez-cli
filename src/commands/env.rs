@@ -1,7 +1,9 @@
 use std::env;
 use colored::*;
+use crate::context::CommandContext;
+use crate::output::{CommandOutput, EzError};
 
-pub fn execute(filter: Option<String>) -> Result<(), String> {
+pub fn execute(filter: Option<String>, ctx: &CommandContext) -> Result<CommandOutput, EzError> {
     let vars: Vec<(String, String)> = env::vars().collect();
 
     let filtered: Vec<_> = if let Some(pattern) = filter {
@@ -12,20 +14,23 @@ pub fn execute(filter: Option<String>) -> Result<(), String> {
         vars
     };
 
-    if filtered.is_empty() {
-        println!("{} No environment variables found", "ℹ️".yellow());
-        return Ok(());
-    }
-
-    println!("{} Found {} environment variables", "🌍".green(), filtered.len());
-    println!();
-
     let mut sorted = filtered;
     sorted.sort_by(|a, b| a.0.cmp(&b.0));
 
-    for (key, value) in sorted {
-        println!("{} = {}", key.cyan().bold(), value.dimmed());
+    if !ctx.json {
+        if sorted.is_empty() {
+            println!("{} No environment variables found", "ℹ️".yellow());
+            return Ok(CommandOutput::new("env", serde_json::json!([])));
+        }
+
+        println!("{} Found {} environment variables", "🌍".green(), sorted.len());
+        println!();
+
+        for (key, value) in &sorted {
+            println!("{} = {}", key.cyan().bold(), value.dimmed());
+        }
     }
 
-    Ok(())
+    let json_vars: Vec<_> = sorted.iter().map(|(k, v)| serde_json::json!({ "name": k, "value": v })).collect();
+    Ok(CommandOutput::new("env", serde_json::json!(json_vars)))
 }

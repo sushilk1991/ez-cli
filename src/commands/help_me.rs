@@ -1,19 +1,23 @@
 use colored::*;
+use crate::context::CommandContext;
+use crate::output::{CommandOutput, EzError};
 
-pub fn execute(command: Option<String>) -> Result<(), String> {
+pub fn execute(command: Option<String>, ctx: &CommandContext) -> Result<CommandOutput, EzError> {
     match command {
-        Some(cmd) => show_command_help(&cmd),
+        Some(cmd) => show_command_help(&cmd, ctx),
         None => {
-            show_all_help();
-            Ok(())
+            show_all_help(ctx);
+            Ok(CommandOutput::new("help-me", serde_json::json!({ "topic": "all" })))
         }
     }
 }
 
-fn show_all_help() {
+fn show_all_help(ctx: &CommandContext) {
+    if ctx.json { return; }
+
     println!("{}", "Easy Unix - User-Friendly Command Reference".bold().underline());
     println!();
-    
+
     let commands = vec![
         ("list / ls", "List files and folders", "ez list [path] --all --details --time --size"),
         ("show / cat", "Show file contents", "ez show file.txt --numbers --first 10"),
@@ -38,8 +42,8 @@ fn show_all_help() {
     ];
 
     for (name, desc, example) in commands {
-        println!("  {} {}\n     {}\n     Example: {}\n", 
-            "•".cyan(), 
+        println!("  {} {}\n     {}\n     Example: {}\n",
+            "•".cyan(),
             name.bold(),
             desc.dimmed(),
             example.yellow());
@@ -48,88 +52,22 @@ fn show_all_help() {
     println!("{} Use '{}' for specific command help", "💡".yellow(), "ez help-me command".cyan());
 }
 
-fn show_command_help(cmd: &str) -> Result<(), String> {
+fn show_command_help(cmd: &str, ctx: &CommandContext) -> Result<CommandOutput, EzError> {
     let help = match cmd {
-        "list" | "ls" => r#"
-List files and folders (ls replacement)
-
-USAGE:
-    ez list [PATH] [OPTIONS]
-
-OPTIONS:
-    -a, --all       Show hidden files (starting with .)
-    -d, --details   Show size and modification date
-    -t, --time      Sort by modification time
-    -s, --size      Sort by file size
-
-EXAMPLES:
-    ez list                    # List current directory
-    ez list /var/log --details # Detailed listing
-    ez list ~ --all --time     # Show all files, sorted by time
-"#,
-        "show" | "cat" => r#"
-Show file contents (cat replacement)
-
-USAGE:
-    ez show FILE [OPTIONS]
-
-OPTIONS:
-    -n, --numbers   Show line numbers
-    -f, --first N   Show only first N lines
-    -l, --last N    Show only last N lines
-
-EXAMPLES:
-    ez show readme.txt
-    ez show log.txt --last 20
-    ez show code.py --numbers --first 50
-"#,
-        "find" | "search" => r#"
-Find files or search inside files
-
-USAGE:
-    ez find PATTERN [PATH] [OPTIONS]
-
-OPTIONS:
-    -i, --inside        Search inside file contents
-    -c, --ignore-case   Case insensitive search
-    -n, --line-numbers  Show line numbers for matches
-
-EXAMPLES:
-    ez find "*.rs"           # Find Rust files
-    ez find "TODO" --inside  # Search for TODO in files
-    ez find "error" src/ -i -n
-"#,
-        "copy" | "cp" => r#"
-Copy files or folders
-
-USAGE:
-    ez copy FROM TO [OPTIONS]
-
-OPTIONS:
-    -r, --recursive   Copy folders recursively
-    -p, --progress    Show progress bar
-
-EXAMPLES:
-    ez copy file.txt backup/
-    ez copy folder/ backup/ --recursive --progress
-"#,
-        "download" | "fetch" => r#"
-Download files from the internet
-
-USAGE:
-    ez download URL [OPTIONS]
-
-OPTIONS:
-    -s, --save NAME   Save with specific filename
-    -p, --progress    Show progress bar
-
-EXAMPLES:
-    ez download https://example.com/file.zip
-    ez download https://example.com/data.json --save mydata.json --progress
-"#,
-        _ => return Err(format!("No help available for '{}'", cmd)),
+        "list" | "ls" => "List files and folders (ls replacement)\n\nUSAGE:\n    ez list [PATH] [OPTIONS]\n\nOPTIONS:\n    -a, --all       Show hidden files\n    -d, --details   Show size and modification date\n    -t, --time      Sort by modification time\n    -s, --size      Sort by file size",
+        "show" | "cat" => "Show file contents (cat replacement)\n\nUSAGE:\n    ez show FILE [OPTIONS]\n\nOPTIONS:\n    -n, --numbers   Show line numbers\n    -f, --first N   Show only first N lines\n    -l, --last N    Show only last N lines",
+        "find" | "search" => "Find files or search inside files\n\nUSAGE:\n    ez find PATTERN [PATH] [OPTIONS]\n\nOPTIONS:\n    -i, --inside        Search inside file contents\n    -c, --ignore-case   Case insensitive\n    -n, --line-numbers  Show line numbers",
+        "copy" | "cp" => "Copy files or folders\n\nUSAGE:\n    ez copy FROM TO [OPTIONS]\n\nOPTIONS:\n    -r, --recursive   Copy folders recursively\n    -p, --progress    Show progress bar",
+        "download" | "fetch" => "Download files from the internet\n\nUSAGE:\n    ez download URL [OPTIONS]\n\nOPTIONS:\n    -s, --save NAME   Save with specific filename\n    -p, --progress    Show progress bar",
+        _ => return Err(EzError::NotFound(format!("No help available for '{}'", cmd))),
     };
 
-    println!("{}", help);
-    Ok(())
+    if !ctx.json {
+        println!("{}", help);
+    }
+
+    Ok(CommandOutput::new("help-me", serde_json::json!({
+        "topic": cmd,
+        "help": help,
+    })))
 }

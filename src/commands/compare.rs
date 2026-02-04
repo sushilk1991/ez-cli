@@ -2,28 +2,62 @@ use std::fs;
 use std::path::PathBuf;
 use colored::*;
 use similar::{ChangeTag, TextDiff};
+use crate::context::CommandContext;
+use crate::output::{CommandOutput, EzError};
 
-pub fn execute(file1: PathBuf, file2: PathBuf, side_by_side: bool) -> Result<(), String> {
+pub fn execute(file1: PathBuf, file2: PathBuf, side_by_side: bool, ctx: &CommandContext) -> Result<CommandOutput, EzError> {
     let contents1 = fs::read_to_string(&file1).map_err(|e| {
-        format!("Cannot read '{}': {}", file1.display(), e)
+        if e.kind() == std::io::ErrorKind::NotFound {
+            EzError::NotFound(format!("Cannot read '{}': {}", file1.display(), e))
+        } else {
+            EzError::General(format!("Cannot read '{}': {}", file1.display(), e))
+        }
     })?;
 
     let contents2 = fs::read_to_string(&file2).map_err(|e| {
-        format!("Cannot read '{}': {}", file2.display(), e)
+        if e.kind() == std::io::ErrorKind::NotFound {
+            EzError::NotFound(format!("Cannot read '{}': {}", file2.display(), e))
+        } else {
+            EzError::General(format!("Cannot read '{}': {}", file2.display(), e))
+        }
     })?;
 
-    if side_by_side {
-        show_side_by_side(&file1, &file2, &contents1, &contents2)?;
-    } else {
-        show_unified(&file1, &file2, &contents1, &contents2);
+    let diff = TextDiff::from_lines(&contents1, &contents2);
+    let mut changes = Vec::new();
+
+    for change in diff.iter_all_changes() {
+        let tag = match change.tag() {
+            ChangeTag::Delete => "delete",
+            ChangeTag::Insert => "insert",
+            ChangeTag::Equal => "equal",
+        };
+        changes.push(serde_json::json!({
+            "tag": tag,
+            "value": change.to_string().trim_end_matches('\n'),
+        }));
     }
 
-    Ok(())
+    if !ctx.json {
+        if side_by_side {
+            show_side_by_side(&file1, &file2, &contents1, &contents2);
+        } else {
+            show_unified(&file1, &file2, &contents1, &contents2);
+        }
+    }
+
+    let identical = !changes.iter().any(|c| c["tag"] != "equal");
+
+    Ok(CommandOutput::new("compare", serde_json::json!({
+        "file1": file1.display().to_string(),
+        "file2": file2.display().to_string(),
+        "identical": identical,
+        "changes": changes,
+    })))
 }
 
 fn show_unified(file1: &PathBuf, file2: &PathBuf, contents1: &str, contents2: &str) {
     let diff = TextDiff::from_lines(contents1, contents2);
-    
+
     println!("{} {}", "---".red(), file1.display());
     println!("{} {}", "+++".green(), file2.display());
 
@@ -37,14 +71,13 @@ fn show_unified(file1: &PathBuf, file2: &PathBuf, contents1: &str, contents2: &s
     }
 }
 
-fn show_side_by_side(file1: &PathBuf, file2: &PathBuf, contents1: &str, contents2: &str) -> Result<(), String> {
+fn show_side_by_side(file1: &PathBuf, file2: &PathBuf, contents1: &str, contents2: &str) {
     let lines1: Vec<&str> = contents1.lines().collect();
     let lines2: Vec<&str> = contents2.lines().collect();
-
     let max_len = lines1.len().max(lines2.len());
     let width = 40;
 
-    println!("{:<width$} │ {}", 
+    println!("{:<width$} │ {}",
         file1.display().to_string().red().underline(),
         file2.display().to_string().green().underline(),
         width = width);
@@ -74,6 +107,4 @@ fn show_side_by_side(file1: &PathBuf, file2: &PathBuf, contents1: &str, contents
 
         println!("{:<width$} │ {}", truncated1, truncated2, width = width);
     }
-
-    Ok(())
 }

@@ -1,5 +1,7 @@
 use colored::*;
 use serde::{Deserialize, Serialize};
+use crate::context::CommandContext;
+use crate::output::{CommandOutput, EzError};
 
 #[derive(Serialize, Deserialize)]
 pub struct ChainResult {
@@ -15,28 +17,33 @@ pub struct ChainStep {
     pub explanation: String,
 }
 
-pub fn run(query: &str, json: bool) -> Result<(), String> {
+pub fn run(query: &str, ctx: &CommandContext) -> Result<CommandOutput, EzError> {
     let pipeline = build_pipeline(query);
-    
-    if json {
+
+    if ctx.json {
         let result = ChainResult {
             input: query.to_string(),
             pipeline: pipeline.pipeline.clone(),
             steps: pipeline.steps,
         };
-        println!("{}", serde_json::to_string_pretty(&result).unwrap());
-    } else {
-        println!("{}", "🔗 Pipeline:".bold());
-        println!("  {}", pipeline.pipeline.green().bold());
-        println!();
-        println!("{}", "📖 Explanation:".bold());
-        for step in &pipeline.steps {
-            println!("  Step {}: {} → {}", step.step, step.command.cyan(), step.explanation);
-        }
-        println!();
-        println!("{} {}", "💡 Copy and run:".dimmed(), pipeline.pipeline);
+        let data = serde_json::to_value(&result).unwrap_or(serde_json::json!({}));
+        return Ok(CommandOutput::new("chain", data));
     }
-    Ok(())
+
+    println!("{}", "🔗 Pipeline:".bold());
+    println!("  {}", pipeline.pipeline.green().bold());
+    println!();
+    println!("{}", "📖 Explanation:".bold());
+    for step in &pipeline.steps {
+        println!("  Step {}: {} → {}", step.step, step.command.cyan(), step.explanation);
+    }
+    println!();
+    println!("{} {}", "💡 Copy and run:".dimmed(), pipeline.pipeline);
+
+    Ok(CommandOutput::new("chain", serde_json::json!({
+        "input": query,
+        "pipeline": pipeline.pipeline,
+    })))
 }
 
 struct PipelineResult {

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use colored::*;
 use serde::{Deserialize, Serialize};
+use crate::context::CommandContext;
+use crate::output::{CommandOutput, EzError};
 
 #[derive(Serialize, Deserialize)]
 pub struct ExplainResult {
@@ -1997,29 +1999,25 @@ fn generate_plain_english(cmd: &str, args: &[String], _parts: &[String]) -> Stri
     plain
 }
 
-pub fn run(command: &str, json: bool) -> Result<(), String> {
-    execute(command.to_string(), json)
-}
-
-pub fn execute(command_str: String, json: bool) -> Result<(), String> {
+pub fn execute(command_str: String, ctx: &CommandContext) -> Result<CommandOutput, EzError> {
     let kb = build_knowledge_base();
     let stages = parse_command(&command_str);
-    
+
     if stages.is_empty() {
-        return Err("Empty command".to_string());
+        return Err(EzError::InvalidArgs("Empty command".to_string()));
     }
-    
+
     let is_pipeline = stages.len() > 1;
-    
-    if json {
+
+    if ctx.json {
         // JSON output
-        if is_pipeline {
+        let data = if is_pipeline {
             let mut stage_results = Vec::new();
             let mut full_command = String::new();
-            
+
             for (idx, (cmd, args)) in stages.iter().enumerate() {
                 let (breakdown, _) = explain_single_command(cmd, args, &kb);
-                
+
                 if idx > 0 {
                     full_command.push_str(" | ");
                 }
@@ -2028,14 +2026,14 @@ pub fn execute(command_str: String, json: bool) -> Result<(), String> {
                     full_command.push(' ');
                     full_command.push_str(arg);
                 }
-                
+
                 stage_results.push(StageResult {
                     stage: idx + 1,
                     command: format!("{} {}", cmd, args.join(" ")).trim().to_string(),
                     breakdown,
                 });
             }
-            
+
             let result = ExplainResult {
                 command: full_command,
                 args: vec![],
@@ -2043,12 +2041,12 @@ pub fn execute(command_str: String, json: bool) -> Result<(), String> {
                 plain_english: format!("Pipeline with {} stages", stages.len()),
                 stages: Some(stage_results),
             };
-            
-            println!("{}", serde_json::to_string_pretty(&result).unwrap());
+
+            serde_json::to_value(&result).unwrap_or(serde_json::json!({}))
         } else {
             let (cmd, args) = &stages[0];
             let (breakdown, plain_english) = explain_single_command(cmd, args, &kb);
-            
+
             let result = ExplainResult {
                 command: cmd.clone(),
                 args: args.clone(),
@@ -2056,51 +2054,53 @@ pub fn execute(command_str: String, json: bool) -> Result<(), String> {
                 plain_english,
                 stages: None,
             };
-            
-            println!("{}", serde_json::to_string_pretty(&result).unwrap());
-        }
-        
-        return Ok(());
+
+            serde_json::to_value(&result).unwrap_or(serde_json::json!({}))
+        };
+
+        return Ok(CommandOutput::new("explain", data));
     }
-    
+
     // Pretty output
     if is_pipeline {
         println!("{}", "📖 Pipeline Breakdown:".bold().cyan());
         println!();
-        
+
         for (idx, (cmd, args)) in stages.iter().enumerate() {
             let (breakdown, _) = explain_single_command(cmd, args, &kb);
-            
+
             println!("  {} {}", "Stage".bold(), format!("{}", idx + 1).yellow().bold());
-            
+
             for item in breakdown {
                 let padded = format!("  {:<25}", item.part);
                 println!("    {} {}", padded.yellow(), format!("→ {}", item.meaning).dimmed());
             }
-            
+
             if idx < stages.len() - 1 {
                 println!("    {}", "↓ (pipe to next stage)".dimmed());
             }
             println!();
         }
-        
-        println!("{} {}", "💡 In plain English:".bold().green(), 
+
+        println!("{} {}", "💡 In plain English:".bold().green(),
             format!("A pipeline of {} commands processing data through multiple stages", stages.len()));
     } else {
         let (cmd, args) = &stages[0];
         let (breakdown, plain_english) = explain_single_command(cmd, args, &kb);
-        
+
         println!("{}", "📖 Command Breakdown:".bold().cyan());
         println!();
-        
+
         for item in breakdown {
             let padded = format!("  {:<30}", item.part);
             println!("{} {}", padded.yellow(), format!("→ {}", item.meaning).dimmed());
         }
-        
+
         println!();
         println!("{} {}", "💡 In plain English:".bold().green(), plain_english);
     }
-    
-    Ok(())
+
+    Ok(CommandOutput::new("explain", serde_json::json!({
+        "command": command_str,
+    })))
 }

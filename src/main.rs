@@ -1,9 +1,13 @@
 mod commands;
+mod context;
+mod output;
 mod utils;
 
 use commands::*;
+use context::CommandContext;
+use output::output_result;
 use clap::{Parser, Subcommand};
-use colored::*;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -17,6 +21,12 @@ struct Cli {
     /// Output results as JSON for AI agents
     #[arg(long, global = true)]
     json: bool,
+    /// Skip confirmation prompts (answer yes to everything)
+    #[arg(long, alias = "no-confirm", global = true)]
+    yes: bool,
+    /// Preview what would happen without making changes
+    #[arg(long, global = true)]
+    dry_run: bool,
 }
 
 #[derive(Subcommand)]
@@ -179,6 +189,9 @@ enum Commands {
         /// Show progress
         #[arg(short, long)]
         progress: bool,
+        /// Skip if destination already exists
+        #[arg(long)]
+        if_not_exists: bool,
     },
 
     /// Move or rename files
@@ -188,13 +201,15 @@ enum Commands {
         from: PathBuf,
         /// Destination
         to: PathBuf,
+        /// Skip if destination already exists
+        #[arg(long)]
+        if_not_exists: bool,
     },
 
     /// Remove files or folders (like rm)
     #[command(name = "remove", alias = "rm")]
     Remove {
         /// Files or folders to remove
-        #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// Remove folders and their contents
         #[arg(short, long)]
@@ -208,19 +223,23 @@ enum Commands {
     #[command(name = "create-folder", alias = "mkdir")]
     CreateFolder {
         /// Folder path to create
-        #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// Create parent folders if needed
         #[arg(short, long)]
         parents: bool,
+        /// Skip if folder already exists
+        #[arg(long)]
+        if_not_exists: bool,
     },
 
     /// Create an empty file (like touch)
     #[command(name = "create-file", alias = "touch")]
     CreateFile {
         /// File path to create
-        #[arg(required = true)]
         paths: Vec<PathBuf>,
+        /// Skip if file already exists
+        #[arg(long)]
+        if_not_exists: bool,
     },
 
     /// Show current location (like pwd)
@@ -278,7 +297,6 @@ enum Commands {
         /// Archive file to create
         archive: PathBuf,
         /// Files or folders to pack
-        #[arg(required = true)]
         files: Vec<PathBuf>,
         /// Compression format (auto-detected from extension)
         #[arg(short, long, value_enum)]
@@ -303,7 +321,6 @@ enum Commands {
     #[command(name = "count")]
     Count {
         /// Files to count
-        #[arg(required = true)]
         files: Vec<PathBuf>,
         /// Count lines only
         #[arg(short, long)]
@@ -349,6 +366,9 @@ enum Commands {
     MakeRunnable {
         /// File to make executable
         file: PathBuf,
+        /// Skip if already executable
+        #[arg(long)]
+        if_not_exists: bool,
     },
 
     /// Explain any Unix command in plain English
@@ -371,10 +391,17 @@ enum Commands {
         /// Command to get help for
         command: Option<String>,
     },
+
+    /// Show machine-readable schema for commands
+    #[command(name = "schema")]
+    Schema {
+        /// Show schema for a specific command
+        command: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
-enum ArchiveFormat {
+pub enum ArchiveFormat {
     Zip,
     Tar,
     TarGz,
@@ -383,112 +410,171 @@ enum ArchiveFormat {
 
 fn main() {
     let cli = Cli::parse();
-    let json = cli.json;
+
+    // Auto-strip ANSI colors when stdout is not a terminal (piped output)
+    if !std::io::stdout().is_terminal() {
+        colored::control::set_override(false);
+    }
+
+    let ctx = CommandContext::new(cli.json, cli.yes, cli.dry_run);
+
+    // For commands that accept Vec<PathBuf>, read from stdin if empty and stdin is piped
+    let command_name: &'static str = match &cli.command {
+        Commands::List { .. } => "list",
+        Commands::Show { .. } => "show",
+        Commands::Peek { .. } => "peek",
+        Commands::Find { .. } => "find",
+        Commands::Search { .. } => "search",
+        Commands::Permissions { .. } => "permissions",
+        Commands::Tree { .. } => "tree",
+        Commands::Env { .. } => "env",
+        Commands::Network => "network",
+        Commands::Ports { .. } => "ports",
+        Commands::Watch { .. } => "watch",
+        Commands::Disk => "disk",
+        Commands::Replace { .. } => "replace",
+        Commands::Copy { .. } => "copy",
+        Commands::Move { .. } => "move",
+        Commands::Remove { .. } => "remove",
+        Commands::CreateFolder { .. } => "create-folder",
+        Commands::CreateFile { .. } => "create-file",
+        Commands::Where => "where",
+        Commands::Size { .. } => "size",
+        Commands::Running { .. } => "running",
+        Commands::Stop { .. } => "stop",
+        Commands::Download { .. } => "download",
+        Commands::Pack { .. } => "pack",
+        Commands::Unpack { .. } => "unpack",
+        Commands::Space => "space",
+        Commands::Count { .. } => "count",
+        Commands::Sort { .. } => "sort",
+        Commands::Compare { .. } => "compare",
+        Commands::MakeRunnable { .. } => "make-runnable",
+        Commands::Explain { .. } => "explain",
+        Commands::Chain { .. } => "chain",
+        Commands::HelpMe { .. } => "help-me",
+        Commands::Schema { .. } => "schema",
+    };
 
     let result = match cli.command {
         Commands::List { path, all, details, time, size } => {
-            list::execute(path, all, details, time, size)
+            list::execute(path, all, details, time, size, &ctx)
         }
         Commands::Show { file, numbers, first, last } => {
-            show::execute(file, numbers, first, last)
+            show::execute(file, numbers, first, last, &ctx)
         }
         Commands::Peek { file, lines, tail } => {
-            peek::execute(file, lines, tail)
+            peek::execute(file, lines, tail, &ctx)
         }
         Commands::Find { pattern, path, inside, ignore_case, line_numbers } => {
-            find::execute(pattern, path, inside, ignore_case, line_numbers)
+            find::execute(pattern, path, inside, ignore_case, line_numbers, &ctx)
         }
         Commands::Search { pattern, path, context } => {
-            search::execute(pattern, path, context)
+            search::execute(pattern, path, context, &ctx)
         }
         Commands::Permissions { path } => {
-            permissions::execute(path)
+            permissions::execute(path, &ctx)
         }
         Commands::Tree { path, depth } => {
-            tree::execute(path, depth)
+            tree::execute(path, depth, &ctx)
         }
         Commands::Env { pattern } => {
-            env::execute(pattern)
+            env::execute(pattern, &ctx)
         }
         Commands::Network => {
-            network::execute()
+            network::execute(&ctx)
         }
         Commands::Ports { port } => {
-            ports::execute(port)
+            ports::execute(port, &ctx)
         }
         Commands::Watch { target, interval } => {
-            watch::execute(target, interval)
+            watch::execute(target, interval, &ctx)
         }
         Commands::Disk => {
-            disk::execute()
+            disk::execute(&ctx)
         }
         Commands::Replace { old, new, file, all } => {
-            replace::execute(old, new, file, all)
+            replace::execute(old, new, file, all, &ctx)
         }
-        Commands::Copy { from, to, recursive, progress } => {
-            copy::execute(from, to, recursive, progress)
+        Commands::Copy { from, to, recursive, progress, if_not_exists } => {
+            copy::execute(from, to, recursive, progress, if_not_exists, &ctx)
         }
-        Commands::Move { from, to } => {
-            r#move::execute(from, to)
+        Commands::Move { from, to, if_not_exists } => {
+            r#move::execute(from, to, if_not_exists, &ctx)
         }
-        Commands::Remove { paths, recursive, force } => {
-            remove::execute(paths, recursive, force)
+        Commands::Remove { mut paths, recursive, force } => {
+            if paths.is_empty() && !ctx.is_stdin_tty {
+                paths = utils::read_paths_from_stdin();
+            }
+            remove::execute(paths, recursive, force, &ctx)
         }
-        Commands::CreateFolder { paths, parents } => {
-            create_folder::execute(paths, parents)
+        Commands::CreateFolder { mut paths, parents, if_not_exists } => {
+            if paths.is_empty() && !ctx.is_stdin_tty {
+                paths = utils::read_paths_from_stdin();
+            }
+            create_folder::execute(paths, parents, if_not_exists, &ctx)
         }
-        Commands::CreateFile { paths } => {
-            create_file::execute(paths)
+        Commands::CreateFile { mut paths, if_not_exists } => {
+            if paths.is_empty() && !ctx.is_stdin_tty {
+                paths = utils::read_paths_from_stdin();
+            }
+            create_file::execute(paths, if_not_exists, &ctx)
         }
         Commands::Where => {
-            r#where::execute()
+            r#where::execute(&ctx)
         }
         Commands::Size { path, detailed } => {
-            size::execute(path, detailed)
+            size::execute(path, detailed, &ctx)
         }
         Commands::Running { all, filter } => {
-            running::execute(all, filter)
+            running::execute(all, filter, &ctx)
         }
         Commands::Stop { target, force } => {
-            stop::execute(target, force)
+            stop::execute(target, force, &ctx)
         }
         Commands::Download { url, save, progress } => {
-            download::execute(url, save, progress)
+            download::execute(url, save, progress, &ctx)
         }
-        Commands::Pack { archive, files, format } => {
-            pack::execute(archive, files, format)
+        Commands::Pack { archive, mut files, format } => {
+            if files.is_empty() && !ctx.is_stdin_tty {
+                files = utils::read_paths_from_stdin();
+            }
+            pack::execute(archive, files, format, &ctx)
         }
         Commands::Unpack { archive, to } => {
-            unpack::execute(archive, to)
+            unpack::execute(archive, to, &ctx)
         }
         Commands::Space => {
-            space::execute()
+            space::execute(&ctx)
         }
-        Commands::Count { files, lines, words, bytes } => {
-            count::execute(files, lines, words, bytes)
+        Commands::Count { mut files, lines, words, bytes } => {
+            if files.is_empty() && !ctx.is_stdin_tty {
+                files = utils::read_paths_from_stdin();
+            }
+            count::execute(files, lines, words, bytes, &ctx)
         }
         Commands::Sort { file, reverse, numeric, unique } => {
-            sort::execute(file, reverse, numeric, unique)
+            sort::execute(file, reverse, numeric, unique, &ctx)
         }
         Commands::Compare { file1, file2, side_by_side } => {
-            compare::execute(file1, file2, side_by_side)
+            compare::execute(file1, file2, side_by_side, &ctx)
         }
-        Commands::MakeRunnable { file } => {
-            make_runnable::execute(file)
+        Commands::MakeRunnable { file, if_not_exists } => {
+            make_runnable::execute(file, if_not_exists, &ctx)
         }
         Commands::Explain { command } => {
-            explain::run(&command, json)
+            explain::execute(command, &ctx)
         }
         Commands::Chain { query } => {
-            chain::run(&query, json)
+            chain::run(&query, &ctx)
         }
         Commands::HelpMe { command } => {
-            help_me::execute(command)
+            help_me::execute(command, &ctx)
+        }
+        Commands::Schema { command } => {
+            schema::execute(command, &ctx)
         }
     };
 
-    if let Err(e) = result {
-        eprintln!("{} {}", "Error:".red().bold(), e);
-        std::process::exit(1);
-    }
+    output_result(ctx.json, command_name, result);
 }

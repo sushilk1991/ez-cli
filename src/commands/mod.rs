@@ -31,3 +31,4 @@ pub mod compare;
 pub mod make_runnable;
 pub mod tree;
 pub mod watch;
+pub mod schema;

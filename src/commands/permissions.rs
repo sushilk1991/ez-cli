@@ -2,16 +2,23 @@ use std::fs;
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 use colored::*;
+use crate::context::CommandContext;
+use crate::output::{CommandOutput, EzError};
 
-pub fn execute(path: PathBuf) -> Result<(), String> {
+pub fn execute(path: PathBuf, ctx: &CommandContext) -> Result<CommandOutput, EzError> {
     let metadata = fs::metadata(&path).map_err(|e| {
-        format!("Cannot read metadata for '{}': {}", path.display(), e)
+        if e.kind() == std::io::ErrorKind::NotFound {
+            EzError::NotFound(format!("Cannot read metadata for '{}': {}", path.display(), e))
+        } else if e.kind() == std::io::ErrorKind::PermissionDenied {
+            EzError::PermissionDenied(format!("Cannot read metadata for '{}': {}", path.display(), e))
+        } else {
+            EzError::General(format!("Cannot read metadata for '{}': {}", path.display(), e))
+        }
     })?;
 
     let permissions = metadata.permissions();
     let mode = permissions.mode();
 
-    // Extract permission bits
     let user_read = mode & 0o400 != 0;
     let user_write = mode & 0o200 != 0;
     let user_exec = mode & 0o100 != 0;
@@ -37,29 +44,37 @@ pub fn execute(path: PathBuf) -> Result<(), String> {
 
     let octal = format!("{:o}", mode & 0o777);
 
-    println!("{} {}", "📋 File:".bold(), path.display().to_string().cyan());
-    println!("{} {} ({})", "🔐 Permissions:".bold(), perm_string.yellow(), octal.dimmed());
-    println!();
-    
-    println!("{}", "Breakdown:".bold());
-    println!("  {} {} {} {}", 
-        "User:".cyan(), 
-        if user_read { "✓ read".green() } else { "✗ read".dimmed() },
-        if user_write { "✓ write".green() } else { "✗ write".dimmed() },
-        if user_exec { "✓ execute".green() } else { "✗ execute".dimmed() }
-    );
-    println!("  {} {} {} {}", 
-        "Group:".cyan(), 
-        if group_read { "✓ read".green() } else { "✗ read".dimmed() },
-        if group_write { "✓ write".green() } else { "✗ write".dimmed() },
-        if group_exec { "✓ execute".green() } else { "✗ execute".dimmed() }
-    );
-    println!("  {} {} {} {}", 
-        "Other:".cyan(), 
-        if other_read { "✓ read".green() } else { "✗ read".dimmed() },
-        if other_write { "✓ write".green() } else { "✗ write".dimmed() },
-        if other_exec { "✓ execute".green() } else { "✗ execute".dimmed() }
-    );
+    if !ctx.json {
+        println!("{} {}", "📋 File:".bold(), path.display().to_string().cyan());
+        println!("{} {} ({})", "🔐 Permissions:".bold(), perm_string.yellow(), octal.dimmed());
+        println!();
+        println!("{}", "Breakdown:".bold());
+        println!("  {} {} {} {}",
+            "User:".cyan(),
+            if user_read { "✓ read".green() } else { "✗ read".dimmed() },
+            if user_write { "✓ write".green() } else { "✗ write".dimmed() },
+            if user_exec { "✓ execute".green() } else { "✗ execute".dimmed() }
+        );
+        println!("  {} {} {} {}",
+            "Group:".cyan(),
+            if group_read { "✓ read".green() } else { "✗ read".dimmed() },
+            if group_write { "✓ write".green() } else { "✗ write".dimmed() },
+            if group_exec { "✓ execute".green() } else { "✗ execute".dimmed() }
+        );
+        println!("  {} {} {} {}",
+            "Other:".cyan(),
+            if other_read { "✓ read".green() } else { "✗ read".dimmed() },
+            if other_write { "✓ write".green() } else { "✗ write".dimmed() },
+            if other_exec { "✓ execute".green() } else { "✗ execute".dimmed() }
+        );
+    }
 
-    Ok(())
+    Ok(CommandOutput::new("permissions", serde_json::json!({
+        "path": path.display().to_string(),
+        "octal": octal,
+        "string": perm_string,
+        "user": { "read": user_read, "write": user_write, "execute": user_exec },
+        "group": { "read": group_read, "write": group_write, "execute": group_exec },
+        "other": { "read": other_read, "write": other_write, "execute": other_exec },
+    })))
 }
